@@ -1,7 +1,6 @@
 import streamlit as st
 import requests
 import openai
-import os
 
 # -------------------------------
 # Config
@@ -15,11 +14,8 @@ st.set_page_config(
     layout="wide"
 )
 
-# Load OpenAI API key (from Streamlit secrets or environment variable)
-openai.api_key = os.getenv("OPENAI_API_KEY", st.secrets.get("OPENAI_API_KEY", None))
-
-if not openai.api_key:
-    st.warning("⚠️ OpenAI API key not found. Please set it in Streamlit secrets.")
+# Load OpenAI API key from Streamlit secrets
+openai.api_key = st.secrets["OPENAI_API_KEY"]
 
 # -------------------------------
 # Session State
@@ -96,7 +92,7 @@ with col2:
             resp = requests.get(f"{API_BASE}/recall/{USER_ID}")
             if resp.status_code == 200:
                 facts = resp.json()
-                if facts and openai.api_key:
+                if facts:
                     prompt = (
                         "Here are facts about a user:\n"
                         + "\n".join(f"- {fact}" for fact in facts)
