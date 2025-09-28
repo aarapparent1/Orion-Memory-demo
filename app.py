@@ -1,6 +1,6 @@
 import streamlit as st
 import requests
-import openai
+from openai import OpenAI
 
 # -------------------------------
 # Config
@@ -14,8 +14,8 @@ st.set_page_config(
     layout="wide"
 )
 
-# Load OpenAI API key from Streamlit secrets
-openai.api_key = st.secrets["OPENAI_API_KEY"]
+# Load OpenAI client with key from Streamlit secrets
+client = OpenAI(api_key=st.secrets["OPENAI_API_KEY"])
 
 # -------------------------------
 # Session State
@@ -98,7 +98,8 @@ with col2:
                         + "\n".join(f"- {fact}" for fact in facts)
                         + "\n\nSummarize the key themes in 2–3 natural sentences."
                     )
-                    ai_resp = openai.ChatCompletion.create(
+
+                    ai_resp = client.chat.completions.create(
                         model="gpt-4o-mini",
                         messages=[
                             {"role": "system", "content": "You are a helpful summarizer."},
@@ -106,7 +107,8 @@ with col2:
                         ],
                         max_tokens=150
                     )
-                    summary = ai_resp["choices"][0]["message"]["content"].strip()
+
+                    summary = ai_resp.choices[0].message.content.strip()
                     st.success(f"**Summary:** {summary}")
                 else:
                     st.warning("No facts stored yet.")
