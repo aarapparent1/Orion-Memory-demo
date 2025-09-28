@@ -1,33 +1,53 @@
 import streamlit as st
 import requests
-
-API_BASE = "https://orion-memory.onrender.com"  # your backend
-USER_ID = "1"  # must be a string per API schema
-
-st.set_page_config(page_title="Orion Memory Demo", page_icon="🛰️", layout="wide")
+import openai
+import os
 
 # -------------------------------
-# Initialize session state
+# Config
+# -------------------------------
+API_BASE = "https://orion-memory.onrender.com"
+USER_ID = "1"
+
+st.set_page_config(
+    page_title="Orion Memory Demo",
+    page_icon="🛰️",
+    layout="wide"
+)
+
+# Load OpenAI API key (from Streamlit secrets or environment variable)
+openai.api_key = os.getenv("OPENAI_API_KEY", st.secrets.get("OPENAI_API_KEY", None))
+
+if not openai.api_key:
+    st.warning("⚠️ OpenAI API key not found. Please set it in Streamlit secrets.")
+
+# -------------------------------
+# Session State
 # -------------------------------
 if "chat_history" not in st.session_state:
     st.session_state.chat_history = []
 
-st.title("🛰️ Orion Memory Demo (Live API)")
-st.write("This demo shows Orion remembering (`/fact`), recalling (`/recall`), summarizing (`/summarize`), and decaying (`/decay`).")
+# -------------------------------
+# UI
+# -------------------------------
+st.title("🛰️ Orion Memory Demo")
+st.markdown("""
+Welcome to the live demo of **Orion Memory**.  
+You can store facts, recall them, generate **AI-powered summaries**, and clear Orion’s memory.
+---
+""")
 
 col1, col2 = st.columns([2, 1])
 
 # -------------------------------
-# Left Panel: Store in Memory
+# Left Panel: Add Facts
 # -------------------------------
 with col1:
     user_input = st.text_input("💬 Type something for Orion to remember:")
 
     if user_input:
         st.session_state.chat_history.append(("You", user_input))
-
         try:
-            # Send fact to Orion memory (user_id as string)
             resp = requests.post(
                 f"{API_BASE}/fact",
                 json={"user_id": USER_ID, "fact": user_input}
@@ -41,22 +61,19 @@ with col1:
 
         st.session_state.chat_history.append(("Orion", reply))
 
-    # Show chat log
     st.subheader("Conversation")
     for role, msg in st.session_state.chat_history:
-        if role == "You":
-            st.markdown(f"**🧑 {role}:** {msg}")
-        else:
-            st.markdown(f"**🤖 {role}:** {msg}")
+        icon = "🧑" if role == "You" else "🤖"
+        st.markdown(f"**{icon} {role}:** {msg}")
 
 # -------------------------------
-# Right Panel: Recall / Summarize / Decay
+# Right Panel: Tools
 # -------------------------------
 with col2:
     st.subheader("🧠 Orion’s Tools")
 
     # Recall
-    if st.button("🔎 Recall Now"):
+    if st.button("🔎 Recall"):
         try:
             resp = requests.get(f"{API_BASE}/recall/{USER_ID}")
             if resp.status_code == 200:
@@ -64,37 +81,51 @@ with col2:
                 if results:
                     st.write("**Memories Found:**")
                     for i, r in enumerate(results, start=1):
-                        if isinstance(r, dict):
-                            fact_text = r.get("fact", str(r))
-                            st.markdown(f"**{i}.** {fact_text}")
-                        else:
-                            st.markdown(f"**{i}.** {r}")
+                        text = r.get("fact", str(r)) if isinstance(r, dict) else str(r)
+                        st.markdown(f"**{i}.** {text}")
                 else:
-                    st.write("No memories found.")
+                    st.info("No memories found.")
             else:
-                st.write(f"[Error {resp.status_code}] {resp.text}")
+                st.error(f"[Error {resp.status_code}] {resp.text}")
         except Exception as e:
-            st.write(f"[Exception] {e}")
+            st.error(f"[Exception] {e}")
 
-    # Summarize
-    if st.button("📝 Summarize"):
+    # Summarize with AI
+    if st.button("📝 Summarize with AI"):
         try:
-            resp = requests.get(f"{API_BASE}/summarize/{USER_ID}")
+            resp = requests.get(f"{API_BASE}/recall/{USER_ID}")
             if resp.status_code == 200:
-                summary = resp.json().get("summary", "No summary available.")
-                st.success(f"**Summary:** {summary}")
+                facts = resp.json()
+                if facts and openai.api_key:
+                    prompt = (
+                        "Here are facts about a user:\n"
+                        + "\n".join(f"- {fact}" for fact in facts)
+                        + "\n\nSummarize the key themes in 2–3 natural sentences."
+                    )
+                    ai_resp = openai.ChatCompletion.create(
+                        model="gpt-4o-mini",
+                        messages=[
+                            {"role": "system", "content": "You are a helpful summarizer."},
+                            {"role": "user", "content": prompt}
+                        ],
+                        max_tokens=150
+                    )
+                    summary = ai_resp["choices"][0]["message"]["content"].strip()
+                    st.success(f"**Summary:** {summary}")
+                else:
+                    st.warning("No facts stored yet.")
             else:
-                st.write(f"[Error {resp.status_code}] {resp.text}")
+                st.error(f"[Error {resp.status_code}] {resp.text}")
         except Exception as e:
-            st.write(f"[Exception] {e}")
+            st.error(f"[Exception] {e}")
 
     # Decay
-    if st.button("🔥 Decay (Forget All)"):
+    if st.button("🔥 Forget All"):
         try:
             resp = requests.post(f"{API_BASE}/decay")
             if resp.status_code == 200:
                 st.warning("🧹 Orion’s memory has been cleared.")
             else:
-                st.write(f"[Error {resp.status_code}] {resp.text}")
+                st.error(f"[Error {resp.status_code}] {resp.text}")
         except Exception as e:
-            st.write(f"[Exception] {e}")
+            st.error(f"[Exception] {e}")
