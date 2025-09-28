@@ -117,4 +117,4 @@ with col2:
             else:
                 st.warning("No facts stored yet.")
         else:
-            st.error(f"[Error {resp.status_code}] {_]()
+            st.error(f"[Error {resp.status_code}] {resp.text}")
